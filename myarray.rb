@@ -1,48 +1,89 @@
 require 'benchmark'
 
-class MyArray
-  THREADS_NUM = 2
+# class MyArray
+#   THREADS_NUM = 2
+#
+#   def initialize(array)
+#     @array = array
+#     @size = array.size
+#   end
+#
+#   def map_multi(&block)
+#     threads('map', &block)
+#   end
+#
+#   def map(&block)
+#     @array.map(&block)
+#   end
+#
+#   def threads(method, &block)
+#     arrays = @array.each_slice(@size/THREADS_NUM).to_a
+#     result_array = Array.new(THREADS_NUM)
+#     threads = []
+#
+#     i = 0
+#     arrays.each do |arr|
+#       threads << Thread.new(i) do |num|
+#         array = arr.method(method).call(&block)
+#         result_array[num] = array
+#       end
+#       i += 1
+#     end
+#
+#     threads.each {|t| t.join}
+#
+#     result_array.flatten
+#   end
+#   private :threads
+#
+# end
 
-  def initialize(array)
-    @array = array
-    @size = array.size
+# myarr = MyArray.new((1..100000))
+#
+# puts myarr.map_multi {|n| n * 2}
+
+class Array
+  THREADS_NUM = 4
+
+  def map_parallel(&block)
+    parallel('map', &block)
   end
 
-  def map_multi(&block)
-    threads('map', &block)
-  end
+  def parallel(method, &block)
+    arrays = (0...THREADS_NUM).reduce([]) do |accum, thread_number|
+      number_of_elements = self.size / THREADS_NUM
 
-  def map(&block)
-    @array.map(&block)
-  end
+      number_of_elements = self.size / THREADS_NUM + 1 unless self.size % 2 == 0
 
-  def threads(method, &block)
-    arrays = @array.each_slice(@size/THREADS_NUM).to_a
-    result_array = Array.new(THREADS_NUM)
-    threads = []
-
-    i = 0
-    arrays.each do |arr|
-      threads << Thread.new(i) do |num|
-        array = arr.method(method).call(&block)
-        result_array[num] = array
+      if number_of_elements < 2
+        number_of_elements = 2
       end
-      i += 1
+
+      left_bound = thread_number * number_of_elements
+      right_bound = thread_number != THREADS_NUM - 1 ? (thread_number + 1) * number_of_elements : self.size
+
+      accum + [(left_bound...right_bound).map {|index| self[index]}]
     end
 
-    threads.each {|t| t.join}
+    # noinspection RubyArgCount
+    arrays = arrays.select {|n| n != []}
 
-    result_array.flatten
+    arrays.map do |arr|
+      Thread.new do
+        Thread.current[:output] = arr.method(method).call(&block)
+      end
+    end.reduce([]) do |accum, t|
+      t.join
+      accum + t[:output]
+    end
   end
-  private :threads
-
 end
 
-myarr = MyArray.new((1..100000))
-
-puts myarr.map_multi {|n| n * 2}
+arr = (0..1000).to_a
 
 Benchmark.bm do |x|
-  x.report('Single thread:') {myarr.map {|n| n * 2 }}
-  x.report('Multi thread :') {myarr.map_multi {|n| n * 2 }}
+  x.report('Single thread:') {arr.map {|n| n * 2 }}
+  x.report('Multi thread :') {arr.map_parallel {|n| n * 2 }}
 end
+
+print arr.map_parallel {|n| n*2}
