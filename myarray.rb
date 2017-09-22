@@ -49,6 +49,18 @@ class Array
     parallel('map', &block)
   end
 
+  def any_parallel(&block)
+    parallel('any?', &block)
+  end
+
+  def all_parallel(&block)
+    parallel('all?', &block)
+  end
+
+  def select_parallel(&block)
+    parallel('select', &block)
+  end
+
   def parallel(method, &block)
     arrays = (0...THREADS_NUM).reduce([]) do |accum, thread_number|
       number_of_elements = self.size / THREADS_NUM
@@ -65,7 +77,6 @@ class Array
       accum + [(left_bound...right_bound).map {|index| self[index]}]
     end
 
-    # noinspection RubyArgCount
     arrays = arrays.select {|n| n != []}
 
     arrays.map do |arr|
@@ -74,12 +85,12 @@ class Array
       end
     end.reduce([]) do |accum, t|
       t.join
-      accum + t[:output]
+      accum + [t[:output]]
     end
   end
 end
 
-arr = (0..1000).to_a
+arr = (0..100).to_a
 
 Benchmark.bm do |x|
   x.report('Single thread:') {arr.map {|n| n * 2 }}
@@ -87,3 +98,9 @@ Benchmark.bm do |x|
 end
 
 print arr.map_parallel {|n| n*2}
+puts
+print arr.all_parallel {|n| n%2 == 0}
+puts
+print arr.any_parallel {|n| n%2 == 0}
+puts
+print arr.select_parallel {|n| n % 3 == 0}
